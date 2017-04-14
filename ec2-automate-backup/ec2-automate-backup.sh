@@ -44,7 +44,7 @@ get_EBS_List() {
   esac
   #creates a list of all ebs volumes that match the selection string from above
   ebs_backup_list=$(aws ec2 describe-volumes --region $region $ebs_selection_string --output text --query 'Volumes[*].VolumeId')
-  #takes the output of the previous command 
+  #takes the output of the previous command
   ebs_backup_list_result=$(echo $?)
   if [[ $ebs_backup_list_result -gt 0 ]]; then
     echo -e "An error occurred when running ec2-describe-volumes. The error returned is below:\n$ebs_backup_list_complete" 1>&2 ; exit 70
@@ -113,7 +113,7 @@ purge_EBS_Snapshots() {
   # snapshot_purge_allowed is a string containing the SnapshotIDs of snapshots
   # that contain a tag with the key value/pair PurgeAllow=true
   snapshot_purge_allowed=$(aws ec2 describe-snapshots --region $region --filters Name=tag:PurgeAllow,Values=true --output text --query 'Snapshots[*].SnapshotId')
-  
+
   for snapshot_id_evaluated in $snapshot_purge_allowed; do
     #gets the "PurgeAfterFE" date which is in UTC with UNIX Time format (or xxxxxxxxxx / %s)
     purge_after_fe=$(aws ec2 describe-snapshots --region $region --snapshot-ids $snapshot_id_evaluated --output text | grep ^TAGS.*PurgeAfterFE | cut -f 3)
@@ -202,13 +202,14 @@ fi
 #get_EBS_List gets a list of EBS instances for which a snapshot is desired. The list of EBS instances depends upon the selection_method that is provided by user input
 get_EBS_List
 
-#the loop below is called once for each volume in $ebs_backup_list - the currently selected EBS volume is passed in as "ebs_selected"
 for ebs_selected in $ebs_backup_list; do
-  ec2_snapshot_description="ec2ab_${ebs_selected}_$current_date"
+  ec2_volume_instance_name=$(aws ec2 describe-instances --filters Name=instance-id,Values=$(wget -qO- http://instance-data/latest/meta-data/instance-id) --query Reservations[].Instances[].Tags[].Value --output text)
+  ec2_volume_instance_name=$(echo "$ec2_volume_instance_name" | sed -e 's/ /_/g')
+  ec2_snapshot_description="${ec2_volume_instance_name}_${ebs_selected}_${current_date}"
   ec2_snapshot_resource_id=$(aws ec2 create-snapshot --region $region --description $ec2_snapshot_description --volume-id $ebs_selected --output text --query SnapshotId 2>&1)
   if [[ $? != 0 ]]; then
     echo -e "An error occurred when running ec2-create-snapshot. The error returned is below:\n$ec2_create_snapshot_result" 1>&2 ; exit 70
-  fi  
+  fi
   create_EBS_Snapshot_Tags
 done
 
